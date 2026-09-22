@@ -1,0 +1,19 @@
+fastapi>=0.110
+uvicorn>=0.29
+pydantic>=2.6
+pytest>=8.0
+httpx>=0.27
+ruff>=0.6
+mypy>=1.11
+
+# For the LangGraph orchestrator (agent_langgraph.py) and its tests.
+# The hand-rolled orchestrator (agent.py) needs none of these.
+# Pinned to >=1.0: pre-1.0 langgraph/langchain-core have a different
+# StateGraph.invoke()/checkpointer API and are not compatible with this code.
+langgraph>=1.0
+langchain-core>=1.0
+
+# openai>=1.30       # only needed for llm_client.OpenAIChatCompletionsClient
+# langchain-openai>=0.2  # only needed to run agent_langgraph.py against a real OpenAI model
+# langsmith>=0.1     # optional: set LANGCHAIN_TRACING_V2=true + LANGCHAIN_API_KEY to get
+#                      full LangSmith traces of every LangGraph run for free, no code change

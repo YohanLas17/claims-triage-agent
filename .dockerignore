@@ -1,0 +1,10 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.git/
+tests/
+eval/
+*.egg-info/
+src/claims_triage_agent/data/audit_logs/*.json

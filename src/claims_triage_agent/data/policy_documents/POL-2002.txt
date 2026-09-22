@@ -1,0 +1,26 @@
+COASTAL BASIC BRONZE HMO -- POLICY DOCUMENT (SYNTHETIC, FOR DEMO PURPOSES ONLY)
+
+Section 1 - Overview
+This document describes coverage rules for the Coastal Basic Bronze HMO
+plan that are not captured in the structured benefits table, including
+exclusions and prior-authorization requirements.
+
+Section 3 - Imaging Services: Brain MRI
+Brain MRI (CPT 70551) requires prior authorization before the procedure
+is performed, except when the MRI is ordered directly from an emergency
+department encounter, in which case prior authorization is waived
+provided the claim documents the emergency department visit and, where
+available, a retrospective authorization reference number. Claims for
+CPT 70551 that lack both a prior authorization number and documented
+emergency-department context will be flagged for manual review rather
+than automatically approved.
+
+Section 5 - Exclusions: Cosmetic Consultations
+Office visits (CPT 99213) held solely for elective cosmetic
+consultations, with no other medically necessary complaint documented,
+are not covered under this plan.
+
+Section 8 - Network Requirements
+This is an HMO plan. Services rendered by out-of-network providers are
+not covered except in a documented emergency, regardless of whether the
+procedure code itself is on the covered-procedures list.

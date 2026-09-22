@@ -1,0 +1,28 @@
+{
+  "PAT-001": {
+    "patient_id": "PAT-001",
+    "policy_id": "POL-1001",
+    "prior_claims": [
+      {"claim_id": "CLM-9001", "procedure_code": "29881", "date_of_service": "2026-06-20", "status": "approved"}
+    ]
+  },
+  "PAT-002": {
+    "patient_id": "PAT-002",
+    "policy_id": "POL-2002",
+    "prior_claims": []
+  },
+  "PAT-003": {
+    "patient_id": "PAT-003",
+    "policy_id": "POL-1001",
+    "prior_claims": [
+      {"claim_id": "CLM-9002", "procedure_code": "11200", "date_of_service": "2025-08-01", "status": "approved"}
+    ]
+  },
+  "PAT-004": {
+    "patient_id": "PAT-004",
+    "policy_id": "POL-2002",
+    "prior_claims": [
+      {"claim_id": "CLM-9003", "procedure_code": "70551", "date_of_service": "2026-01-15", "status": "denied"}
+    ]
+  }
+}

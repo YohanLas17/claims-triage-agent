@@ -1,0 +1,33 @@
+{
+  "POL-1001": {
+    "policy_id": "POL-1001",
+    "plan_name": "Meridian Health Gold PPO",
+    "deductible": 1000.0,
+    "deductible_met": 400.0,
+    "coinsurance_rate": 0.20,
+    "out_of_pocket_max": 6000.0,
+    "out_of_pocket_met": 400.0,
+    "covered_procedures": {
+      "29881": true,
+      "97110": true,
+      "11200": true,
+      "99213": true
+    },
+    "requires_prior_auth": ["27447"]
+  },
+  "POL-2002": {
+    "policy_id": "POL-2002",
+    "plan_name": "Coastal Basic Bronze HMO",
+    "deductible": 3000.0,
+    "deductible_met": 3000.0,
+    "coinsurance_rate": 0.40,
+    "out_of_pocket_max": 8000.0,
+    "out_of_pocket_met": 3000.0,
+    "covered_procedures": {
+      "99213": true,
+      "70551": true,
+      "11200": true
+    },
+    "requires_prior_auth": ["70551"]
+  }
+}

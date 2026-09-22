@@ -1,0 +1,30 @@
+[
+  {
+    "claim_id": "CLM-1001",
+    "expected_status": "denied",
+    "requires_rag": true,
+    "expected_cited_chunk": "POL-1001-chunk1",
+    "note": "Structured data says CPT 11200 is covered; only the free-text Section 4 exclusion (cosmetic removal) makes the correct answer 'denied'. Proves the RAG path is load-bearing, not decorative."
+  },
+  {
+    "claim_id": "CLM-1002",
+    "expected_status": "flagged_for_review",
+    "requires_rag": true,
+    "expected_cited_chunk": "POL-1001-chunk3",
+    "note": "Same-joint arthroscopy within 90 days requires a peer-to-peer review per Section 7; not a simple approve/deny."
+  },
+  {
+    "claim_id": "CLM-1003",
+    "expected_status": "approved",
+    "requires_rag": true,
+    "expected_cited_chunk": "POL-2002-chunk1",
+    "note": "Prior auth is waived for ED-ordered brain MRIs per Section 3, and the claim documents both the ED context and a retrospective auth number."
+  },
+  {
+    "claim_id": "CLM-1004",
+    "expected_status": "denied",
+    "requires_rag": false,
+    "expected_cited_chunk": null,
+    "note": "CPT 27447 is simply absent from POL-2002's covered-procedures table; decidable from lookup_policy alone."
+  }
+]

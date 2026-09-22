@@ -1,0 +1,35 @@
+MERIDIAN HEALTH GOLD PPO -- POLICY DOCUMENT (SYNTHETIC, FOR DEMO PURPOSES ONLY)
+
+Section 1 - Overview
+This document describes coverage rules for the Meridian Health Gold PPO
+plan that are not captured in the structured benefits table, including
+exclusions and prior-authorization requirements.
+
+Section 4 - Exclusions: Skin Lesion Removal
+Removal of benign skin lesions, including skin tags (CPT 11200), is
+covered only when the lesion causes documented irritation, bleeding,
+infection, or functional impairment, as noted by the treating physician.
+Removal performed for purely cosmetic reasons, with no such symptoms
+documented, is excluded from coverage under this plan regardless of
+whether CPT 11200 appears on the standard covered-procedures list.
+
+Section 6 - Prior Authorization: Joint Replacement
+Total knee replacement (CPT 27447) and total hip replacement (CPT 27130)
+require prior authorization from Meridian Health Gold PPO's utilization
+management team at least 14 calendar days before the scheduled procedure
+date. Claims for these procedures submitted without a documented prior
+authorization reference number will be denied.
+
+Section 7 - Repeat Procedures: Same-Joint Arthroscopy
+Knee arthroscopy (CPT 29881) performed on the same joint within 90 days
+of a prior approved arthroscopy on that same joint is not automatically
+payable. These claims require a peer-to-peer medical necessity review
+between the treating physician and a Meridian medical director before
+payment can be issued, and should be flagged for manual review rather
+than auto-approved or auto-denied.
+
+Section 9 - Physical Therapy Visit Limits
+Outpatient physical therapy (CPT 97110) is covered up to 20 visits per
+calendar year without prior authorization. Additional visits beyond the
+20-visit limit require a submitted treatment plan and prior
+authorization.
