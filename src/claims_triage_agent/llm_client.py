@@ -86,6 +86,64 @@ class FakeLLMClient:
         return self._calls
 
 
+class ReferenceScriptLLMClient:
+    """A stateless ``LLMClient`` that replays known-correct scripted
+    trajectories, keyed by claim id, for the no-API-key demo app
+    (``claims_triage_agent.demo``).
+
+    Unlike ``FakeLLMClient`` (which tracks a call count on the instance and
+    is built fresh per test), this client is shared across concurrent HTTP
+    requests by ``api.create_app``. It has no mutable state: on every call
+    it re-derives which claim and which turn it is by reading the
+    conversation history handed to it -- the claim id from the first
+    ``user`` message (``agent._build_claim_message`` always JSON-embeds the
+    claim there) and the turn index from how many ``assistant`` messages
+    already appear in ``messages``. That makes it safe to use for multiple
+    concurrent ``/adjudicate`` requests without any locking.
+    """
+
+    def __init__(self, scripts: dict[str, list[LLMResponse]]) -> None:
+        self._scripts = scripts
+
+    def _claim_id_from_messages(self, messages: list[dict[str, Any]]) -> str:
+        for message in messages:
+            if message.get("role") != "user":
+                continue
+            content = message.get("content", "")
+            brace_index = content.find("{")
+            if brace_index == -1:
+                continue
+            claim = json.loads(content[brace_index:])
+            return claim["claim_id"]
+        raise ValueError(
+            "ReferenceScriptLLMClient could not find a claim in the "
+            "conversation's user message."
+        )
+
+    def complete(
+        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
+    ) -> LLMResponse:
+        claim_id = self._claim_id_from_messages(messages)
+        script = self._scripts.get(claim_id)
+        if script is None:
+            supported = ", ".join(sorted(self._scripts))
+            raise ValueError(
+                f"Demo mode does not have a scripted trajectory for claim "
+                f"{claim_id!r}. It only supports these {len(self._scripts)} "
+                f"synthetic demo claims: {supported}. Use `--llm openai` "
+                f"in eval/run_eval.py (or wire up a real LLMClient) to "
+                f"adjudicate arbitrary claims."
+            )
+        turn = sum(1 for m in messages if m.get("role") == "assistant")
+        if turn >= len(script):
+            raise AssertionError(
+                f"ReferenceScriptLLMClient script for {claim_id!r} exhausted "
+                f"after {turn} turns; the agent asked for another turn than "
+                f"the script provides."
+            )
+        return script[turn]
+
+
 class OpenAIChatCompletionsClient:
     """A thin ``LLMClient`` adapter over the OpenAI Chat Completions API.
 

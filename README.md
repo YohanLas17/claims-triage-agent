@@ -158,6 +158,37 @@ citing the free-text cosmetic-exclusion clause in `POL-1001.txt` (Section
 `tests/test_agent.py::test_agent_denies_cosmetic_removal_using_only_the_free_text_clause`
 and is `eval/eval_cases.json`'s first case.
 
+## Demo (no API key needed)
+
+```bash
+pip install -r requirements.txt
+pip install -e .
+uvicorn claims_triage_agent.demo:app --reload
+```
+
+Then open **http://localhost:8000/docs** and `POST /adjudicate` with one of
+the 4 synthetic claims in `src/claims_triage_agent/data/claims/`
+(`CLM-1001.json` .. `CLM-1004.json`). You'll see the real agent run: real
+tool calls (`lookup_policy`, `search_policy_documents`, ...), real BM25
+retrieval, the real reliability guardrails, and a real structured audit
+trail in the response — all through the actual `ClaimsTriageAgent` loop and
+`api.py` FastAPI app, no mocking of the orchestration layer.
+
+**What this is not:** `claims_triage_agent.demo` wires
+`ReferenceScriptLLMClient` in place of a real model — it replays the exact
+same hand-written, known-correct tool-call trajectories
+(`demo_scripts.DEMO_SCRIPTS`) that `eval/run_eval.py --llm fake-reference`
+uses offline. It only knows how to answer for those 4 specific claim ids;
+it is not a real LLM and cannot adjudicate an arbitrary claim. **This demo
+proves the architecture works — the audit trail, the RAG path, the
+reliability guardrails — it is not evidence of any model's adjudication
+quality.** For a real accuracy number against a real model, run:
+
+```bash
+export OPENAI_API_KEY=sk-...
+python eval/run_eval.py --llm openai
+```
+
 ## Running it
 
 ```bash
@@ -322,7 +353,8 @@ current dependency versions, both now fixed:
 ```
 src/claims_triage_agent/
   schema.py          domain dataclasses (Claim, Decision, AuditTrail, ...)
-  llm_client.py       LLMClient protocol, FakeLLMClient, OpenAIChatCompletionsClient
+  llm_client.py       LLMClient protocol, FakeLLMClient, ReferenceScriptLLMClient, OpenAIChatCompletionsClient
+  demo_scripts.py     DEMO_SCRIPTS: the known-correct trajectories shared by run_eval.py and demo.py
   tools.py            lookup_policy, check_prior_claims, calculate_coverage
   retriever.py         Retriever protocol + from-scratch BM25Retriever
   agent.py             ClaimsTriageAgent: the hand-rolled tool-calling loop + guardrails
@@ -330,8 +362,9 @@ src/claims_triage_agent/
   audit.py             writes AuditTrail to disk as JSON
   api.py               FastAPI POST /adjudicate (uses ClaimsTriageAgent)
   server.py            production ASGI entrypoint (`uvicorn claims_triage_agent.server:app`)
+  demo.py              no-API-key ASGI entrypoint (`uvicorn claims_triage_agent.demo:app`)
   data/               synthetic policies.json, patients.json, policy_documents/, claims/
-tests/                pytest suite (tools, retriever, agent, agent_langgraph, api)
+tests/                pytest suite (tools, retriever, agent, agent_langgraph, api, demo)
 eval/                 eval_cases.json + run_eval.py (fake-reference / openai)
 Dockerfile, .dockerignore
 .github/workflows/ci.yml   ruff + mypy + pytest + docker build, on push/PR to main
