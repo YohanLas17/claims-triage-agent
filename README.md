@@ -9,17 +9,24 @@ All data (patients, policies, claims, policy documents) is **synthetic and
 invented** for this repository. No real patient data, real payer data, or
 proprietary code is used anywhere here.
 
+**A live request against `POST /adjudicate`** — the structured data says
+this procedure is covered, but the agent finds and cites the free-text
+exclusion clause that says otherwise, and denies the claim:
+
+<img width="850" alt="Request: a skin-tag removal claim, billed as covered" src="https://github.com/user-attachments/assets/eb923ae6-5a57-40d9-9d73-4040c308979e" />
+<img width="850" alt="Response: denied, citing the cosmetic-exclusion clause, with full audit trail" src="https://github.com/user-attachments/assets/d5c9d387-36f9-4171-806a-c124b76e9f20" />
+
 ## Why this project
 
-I built this as a public, from-scratch demonstration of the kind of system
-described in ClarityCare AI's AI Engineer (V.I.E.) role: an LLM agent that
-reads and reasons over clinical/administrative documents for US health
-insurers, with reliability and auditability as first-class requirements
-rather than an afterthought. It mirrors, on an invented scenario, the
-architecture pattern I worked with in my first professional experience
-building a production LLM agent (document agents, RAG, tool
-orchestration) — nothing here is copied from that codebase; it is the
-same category of engineering decisions, applied to public synthetic data.
+I built this as a public, from-scratch demonstration of what I consider
+core to AI engineering in healthtech: an LLM agent that reads and reasons
+over clinical/administrative documents, with reliability and auditability
+treated as first-class requirements rather than an afterthought. It
+mirrors, on an invented scenario, the architecture pattern I worked with
+in my first professional experience building a production LLM agent
+(document agents, RAG, tool orchestration) — nothing here is copied from
+that codebase; it is the same category of engineering decisions, applied
+to public synthetic data.
 
 ## Stack
 
@@ -109,8 +116,8 @@ flowchart TD
     HR --> END
 ```
 
-Why build it twice rather than just once with LangGraph: it lets me show
-both that I understand what a tool-calling agent loop actually does
+Why build it twice rather than just once with LangGraph: it shows both
+that I understand what a tool-calling agent loop actually does
 underneath, and that I can build the same thing with the framework a
 production team would actually use day to day.
 
@@ -156,7 +163,8 @@ only way to reach the correct `denied` decision is by retrieving and
 citing the free-text cosmetic-exclusion clause in `POL-1001.txt` (Section
 4) via `search_policy_documents`. This case is asserted directly in
 `tests/test_agent.py::test_agent_denies_cosmetic_removal_using_only_the_free_text_clause`
-and is `eval/eval_cases.json`'s first case.
+and is `eval/eval_cases.json`'s first case — and it's exactly what the
+screenshot above shows happening live.
 
 ## Demo (no API key needed)
 
@@ -246,14 +254,14 @@ This project was originally written in a sandboxed environment with no
 network access, so `agent_langgraph.py`, `tests/test_agent_langgraph.py`,
 `api.py` and `tests/test_api.py` were only hand-reviewed, never actually
 run. That gap has since been closed: `ruff`, `mypy` and the full `pytest`
-suite have now all been run for real, in a Windows venv with network
-access, against the dependency versions below.
+suite have now all been run for real, with network access, against the
+dependency versions below.
 
 Versions actually installed and tested against:
 
 | Package | Version |
 |---|---|
-| Python | 3.14.0 |
+| Python | 3.12 |
 | langgraph | 1.2.12 |
 | langchain-core | 1.6.4 |
 | fastapi | 0.141.1 |
@@ -267,105 +275,3 @@ compatible with `agent_langgraph.py` as written. The original
 `>=0.2`/`>=0.3` floors in an earlier revision of this file were wrong —
 they were guesses made without network access to actually check.
 
-Current results, run from a clean venv:
-
-```
-$ ruff check .
-All checks passed!
-
-$ mypy src/
-Success: no issues found in 10 source files
-
-$ pytest -v
-======================== 27 passed, 1 warning in 0.51s ========================
-```
-
-All 27 tests across `tests/test_tools.py`, `tests/test_retriever.py`,
-`tests/test_agent.py`, `tests/test_agent_langgraph.py` and
-`tests/test_api.py` pass. The one warning is an unrelated
-`DeprecationWarning` from `starlette`'s test client (an `anyio` internal
-alias), not from this project's code.
-
-Two real issues turned up only once things were actually executed against
-current dependency versions, both now fixed:
-
-- `agent_langgraph.py`'s `graph.invoke()` calls didn't type-check against
-  langgraph 1.x's `Pregel.invoke()` overloads — the `config` dict was
-  inferred as a plain `dict[str, object]` rather than the `RunnableConfig`
-  TypedDict the overloads require. Fixed by typing `config` explicitly as
-  `RunnableConfig` rather than casting or ignoring the error.
-- `tests/test_agent_langgraph.py::test_human_review_is_a_no_op_when_decision_is_not_flagged`
-  constructed two `AIMessage`s without `content=""` (every other
-  `AIMessage` in the file passes it). Current `langchain-core`/pydantic
-  rejects `content=None`. Fixed to match the pattern used everywhere else
-  in the file — a test-only fix, not a behavior change.
-
-## Production considerations
-
-- **Why a full audit trail, not just debug logs.** In a HIPAA-adjacent
-  claims workflow, "why did the system decide this" has to be answerable
-  after the fact, by someone who wasn't in the loop when it happened. The
-  audit trail (`audit.py`, `schema.AuditTrail`) is therefore modeled as a
-  first-class, structured record — every tool call, its arguments, its
-  result, a timestamp, and any passages cited — written to disk as JSON
-  per run, rather than free-text log lines. It's designed to answer a
-  compliance question directly, not to be grepped by an engineer
-  debugging a stack trace.
-- **Why force `flagged_for_review` instead of trusting the model.** An LLM
-  that is uncertain will often still produce a confident-sounding
-  approve/deny. In a claims context, a wrong automated denial or approval
-  has real financial and care consequences, while a false
-  `flagged_for_review` just costs a human reviewer a few minutes. The two
-  guardrails above are intentionally asymmetric: they only ever push a
-  decision *up* in caution (toward `flagged_for_review`), never make an
-  automated decision more confident than the model's own tool use
-  supports.
-
-## Limitations (no overclaiming)
-
-- The eval harness's `fake-reference` mode replays hand-written, known-
-  correct trajectories. It proves the harness plumbing works end-to-end
-  offline; it is **not** a measurement of any LLM's actual adjudication
-  quality. A real accuracy number requires running `--llm openai` (or
-  wiring up another provider) against `eval_cases.json`, which needs an
-  API key and was not run as part of preparing this repository.
-  Similarly, the "100% accuracy" the offline mode reports is a property
-  of the reference scripts, not a claim about model capability.
-- Only 4 synthetic claims and 2 synthetic policies exist. This is enough
-  to exercise every code path (approve, deny, flag, both reliability
-  overrides, RAG-required and RAG-not-required cases) but far too small
-  a sample to say anything about accuracy on real claim variety or edge
-  cases.
-- BM25 is a lexical retriever: it will miss a relevant clause that uses
-  different wording than the query (e.g. a query about "cosmetic" won't
-  find a clause that only says "aesthetic, non-restorative procedures").
-  A production system handling open-ended clinical language would likely
-  need a hybrid lexical + embedding retriever.
-- The LangGraph checkpointer used here (`InMemorySaver`) does not survive
-  a process restart. A deployment that needs a human review to actually
-  outlive the API process restarting would swap in
-  `langgraph.checkpoint.postgres.PostgresSaver` (or similar) — a
-  one-line change since `agent_langgraph.py` only depends on the
-  checkpointer interface, not the in-memory implementation specifically.
-
-## Repository layout
-
-```
-src/claims_triage_agent/
-  schema.py          domain dataclasses (Claim, Decision, AuditTrail, ...)
-  llm_client.py       LLMClient protocol, FakeLLMClient, ReferenceScriptLLMClient, OpenAIChatCompletionsClient
-  demo_scripts.py     DEMO_SCRIPTS: the known-correct trajectories shared by run_eval.py and demo.py
-  tools.py            lookup_policy, check_prior_claims, calculate_coverage
-  retriever.py         Retriever protocol + from-scratch BM25Retriever
-  agent.py             ClaimsTriageAgent: the hand-rolled tool-calling loop + guardrails
-  agent_langgraph.py   LangGraphClaimsTriageAgent: the same agent as a StateGraph, with HITL
-  audit.py             writes AuditTrail to disk as JSON
-  api.py               FastAPI POST /adjudicate (uses ClaimsTriageAgent)
-  server.py            production ASGI entrypoint (`uvicorn claims_triage_agent.server:app`)
-  demo.py              no-API-key ASGI entrypoint (`uvicorn claims_triage_agent.demo:app`)
-  data/               synthetic policies.json, patients.json, policy_documents/, claims/
-tests/                pytest suite (tools, retriever, agent, agent_langgraph, api, demo)
-eval/                 eval_cases.json + run_eval.py (fake-reference / openai)
-Dockerfile, .dockerignore
-.github/workflows/ci.yml   ruff + mypy + pytest + docker build, on push/PR to main
-```
