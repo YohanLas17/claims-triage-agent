@@ -1,0 +1,10 @@
+{
+  "claim_id": "CLM-1017",
+  "patient_id": "PAT-017",
+  "policy_id": "POL-1001",
+  "procedure_code": "97110",
+  "procedure_description": "Therapeutic exercise, physical therapy",
+  "billed_amount": 100.0,
+  "date_of_service": "2026-10-06",
+  "notes": "This is the patient's 23rd outpatient physical therapy visit (CPT 97110) of the calendar year, beyond the standard 20-visit limit. No treatment plan or prior authorization has been submitted."
+}

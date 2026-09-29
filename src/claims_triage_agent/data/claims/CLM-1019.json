@@ -1,0 +1,10 @@
+{
+  "claim_id": "CLM-1019",
+  "patient_id": "PAT-019",
+  "policy_id": "POL-2002",
+  "procedure_code": "70551",
+  "procedure_description": "MRI brain without contrast",
+  "billed_amount": 2300.0,
+  "date_of_service": "2026-09-08",
+  "notes": "Patient was treated at an out-of-network emergency department after a car accident while traveling. The MRI was ordered directly from that ED encounter and the emergency is documented in the visit note; retrospective authorization reference PA-77330 is on file."
+}

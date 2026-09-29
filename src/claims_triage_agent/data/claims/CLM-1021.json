@@ -1,0 +1,10 @@
+{
+  "claim_id": "CLM-1021",
+  "patient_id": "PAT-021",
+  "policy_id": "POL-2002",
+  "procedure_code": "11200",
+  "procedure_description": "Removal of skin tags, up to and including 15 lesions",
+  "billed_amount": 400.0,
+  "date_of_service": "2026-09-10",
+  "notes": "Patient requested removal of a skin tag on the neck for cosmetic reasons. No irritation, bleeding, or functional impairment documented in the visit note."
+}

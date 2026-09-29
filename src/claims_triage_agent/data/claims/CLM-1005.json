@@ -1,0 +1,10 @@
+{
+  "claim_id": "CLM-1005",
+  "patient_id": "PAT-005",
+  "policy_id": "POL-1001",
+  "procedure_code": "11200",
+  "procedure_description": "Removal of skin tags, up to and including 15 lesions",
+  "billed_amount": 420.0,
+  "date_of_service": "2026-09-04",
+  "notes": "Patient reports the skin tag on the axilla has been recurrently bleeding and catching on clothing, causing documented irritation. Treating physician notes visible inflammation and recommends removal for symptomatic relief, not for cosmetic reasons."
+}

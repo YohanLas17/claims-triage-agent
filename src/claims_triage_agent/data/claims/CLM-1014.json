@@ -1,0 +1,10 @@
+{
+  "claim_id": "CLM-1014",
+  "patient_id": "PAT-014",
+  "policy_id": "POL-1001",
+  "procedure_code": "97110",
+  "procedure_description": "Therapeutic exercise, physical therapy",
+  "billed_amount": 95.0,
+  "date_of_service": "2026-09-01",
+  "notes": "This is the patient's 15th outpatient physical therapy visit (CPT 97110) of the calendar year, for post-surgical knee rehabilitation. No treatment plan or prior authorization has been submitted."
+}

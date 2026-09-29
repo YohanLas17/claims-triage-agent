@@ -3,7 +3,13 @@
     "patient_id": "PAT-001",
     "policy_id": "POL-1001",
     "prior_claims": [
-      {"claim_id": "CLM-9001", "procedure_code": "29881", "date_of_service": "2026-06-20", "status": "approved"}
+      {
+        "claim_id": "CLM-9001",
+        "procedure_code": "29881",
+        "date_of_service": "2026-06-20",
+        "status": "approved",
+        "body_site": "left knee"
+      }
     ]
   },
   "PAT-002": {
@@ -24,5 +30,148 @@
     "prior_claims": [
       {"claim_id": "CLM-9003", "procedure_code": "70551", "date_of_service": "2026-01-15", "status": "denied"}
     ]
+  },
+  "PAT-005": {
+    "patient_id": "PAT-005",
+    "policy_id": "POL-1001",
+    "prior_claims": []
+  },
+  "PAT-006": {
+    "patient_id": "PAT-006",
+    "policy_id": "POL-2002",
+    "prior_claims": []
+  },
+  "PAT-007": {
+    "patient_id": "PAT-007",
+    "policy_id": "POL-2002",
+    "prior_claims": []
+  },
+  "PAT-008": {
+    "patient_id": "PAT-008",
+    "policy_id": "POL-1001",
+    "prior_claims": []
+  },
+  "PAT-009": {
+    "patient_id": "PAT-009",
+    "policy_id": "POL-1001",
+    "prior_claims": [
+      {
+        "claim_id": "CLM-9004",
+        "procedure_code": "29881",
+        "date_of_service": "2026-03-01",
+        "status": "approved",
+        "body_site": "right knee"
+      }
+    ]
+  },
+  "PAT-010": {
+    "patient_id": "PAT-010",
+    "policy_id": "POL-1001",
+    "prior_claims": [
+      {
+        "claim_id": "CLM-9005",
+        "procedure_code": "29881",
+        "date_of_service": "2026-07-01",
+        "status": "approved",
+        "body_site": "left knee"
+      }
+    ]
+  },
+  "PAT-011": {
+    "patient_id": "PAT-011",
+    "policy_id": "POL-1001",
+    "prior_claims": []
+  },
+  "PAT-012": {
+    "patient_id": "PAT-012",
+    "policy_id": "POL-1001",
+    "prior_claims": []
+  },
+  "PAT-013": {
+    "patient_id": "PAT-013",
+    "policy_id": "POL-1001",
+    "prior_claims": []
+  },
+  "PAT-014": {
+    "patient_id": "PAT-014",
+    "policy_id": "POL-1001",
+    "prior_claims": []
+  },
+  "PAT-015": {
+    "patient_id": "PAT-015",
+    "policy_id": "POL-1001",
+    "prior_claims": []
+  },
+  "PAT-016": {
+    "patient_id": "PAT-016",
+    "policy_id": "POL-1001",
+    "prior_claims": []
+  },
+  "PAT-017": {
+    "patient_id": "PAT-017",
+    "policy_id": "POL-1001",
+    "prior_claims": []
+  },
+  "PAT-018": {
+    "patient_id": "PAT-018",
+    "policy_id": "POL-2002",
+    "prior_claims": []
+  },
+  "PAT-019": {
+    "patient_id": "PAT-019",
+    "policy_id": "POL-2002",
+    "prior_claims": []
+  },
+  "PAT-020": {
+    "patient_id": "PAT-020",
+    "policy_id": "POL-2002",
+    "prior_claims": []
+  },
+  "PAT-021": {
+    "patient_id": "PAT-021",
+    "policy_id": "POL-2002",
+    "prior_claims": []
+  },
+  "PAT-022": {
+    "patient_id": "PAT-022",
+    "policy_id": "POL-1001",
+    "prior_claims": []
+  },
+  "PAT-023": {
+    "patient_id": "PAT-023",
+    "policy_id": "POL-1001",
+    "prior_claims": [
+      {"claim_id": "CLM-9006", "procedure_code": "97110", "date_of_service": "2026-08-01", "status": "approved"}
+    ]
+  },
+  "PAT-024": {
+    "patient_id": "PAT-024",
+    "policy_id": "POL-1001",
+    "prior_claims": []
+  },
+  "PAT-025": {
+    "patient_id": "PAT-025",
+    "policy_id": "POL-1001",
+    "prior_claims": []
+  },
+  "PAT-026": {
+    "patient_id": "PAT-026",
+    "policy_id": "POL-1001",
+    "prior_claims": []
+  },
+  "PAT-027": {
+    "patient_id": "PAT-027",
+    "policy_id": "POL-1001",
+    "prior_claims": []
+  },
+  "PAT-028": {
+    "patient_id": "PAT-028",
+    "policy_id": "POL-2002",
+    "prior_claims": []
+  },
+  "PAT-029": {
+    "patient_id": "PAT-029",
+    "policy_id": "POL-1001",
+    "prior_claims": []
   }
 }

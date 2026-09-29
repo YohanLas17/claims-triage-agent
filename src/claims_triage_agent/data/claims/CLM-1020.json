@@ -1,0 +1,10 @@
+{
+  "claim_id": "CLM-1020",
+  "patient_id": "PAT-020",
+  "policy_id": "POL-2002",
+  "procedure_code": "70551",
+  "procedure_description": "MRI brain without contrast",
+  "billed_amount": 2050.0,
+  "date_of_service": "2026-09-09",
+  "notes": "MRI ordered from the emergency department following a syncopal episode. The ED encounter is clearly documented in the visit note; no retrospective authorization reference number has been issued yet."
+}

@@ -1,0 +1,10 @@
+{
+  "claim_id": "CLM-1010",
+  "patient_id": "PAT-010",
+  "policy_id": "POL-1001",
+  "procedure_code": "29881",
+  "procedure_description": "Arthroscopy, knee, surgical; with meniscectomy",
+  "billed_amount": 5300.0,
+  "date_of_service": "2026-08-10",
+  "notes": "Arthroscopy on the right knee. Patient had a prior arthroscopy on the LEFT knee (CLM-9005) approved on 2026-07-01; this claim is for a different joint."
+}

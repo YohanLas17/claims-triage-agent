@@ -1,0 +1,10 @@
+{
+  "claim_id": "CLM-1029",
+  "patient_id": "PAT-028",
+  "policy_id": "POL-2002",
+  "procedure_code": "70551",
+  "procedure_description": "MRI brain without contrast",
+  "billed_amount": 2150.0,
+  "date_of_service": "2026-09-18",
+  "notes": "Elective, non-emergency brain MRI ordered by the patient's neurologist for recurring headaches. Prior authorization reference PA-90310 was obtained before the procedure."
+}

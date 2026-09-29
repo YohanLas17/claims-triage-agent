@@ -1,0 +1,10 @@
+{
+  "claim_id": "CLM-1009",
+  "patient_id": "PAT-009",
+  "policy_id": "POL-1001",
+  "procedure_code": "29881",
+  "procedure_description": "Arthroscopy, knee, surgical; with meniscectomy",
+  "billed_amount": 5400.0,
+  "date_of_service": "2026-08-20",
+  "notes": "Follow-up arthroscopy on the right knee. Prior arthroscopy on the same knee (CLM-9004) was approved on 2026-03-01, more than 90 days before this date of service."
+}

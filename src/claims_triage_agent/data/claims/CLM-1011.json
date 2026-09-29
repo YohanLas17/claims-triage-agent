@@ -1,0 +1,10 @@
+{
+  "claim_id": "CLM-1011",
+  "patient_id": "PAT-011",
+  "policy_id": "POL-1001",
+  "procedure_code": "27447",
+  "procedure_description": "Total knee arthroplasty",
+  "billed_amount": 35200.0,
+  "date_of_service": "2026-09-15",
+  "notes": "Elective total knee replacement. Prior authorization reference PA-61190 was obtained on 2026-08-25, 21 days before the scheduled procedure date."
+}

@@ -1,0 +1,10 @@
+{
+  "claim_id": "CLM-1025",
+  "patient_id": "PAT-024",
+  "policy_id": "POL-1001",
+  "procedure_code": "00099",
+  "procedure_description": "Unspecified miscellaneous procedure",
+  "billed_amount": 900.0,
+  "date_of_service": "2026-09-13",
+  "notes": "Procedure code does not correspond to any standard covered service."
+}

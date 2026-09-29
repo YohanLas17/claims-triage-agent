@@ -32,4 +32,6 @@ Section 9 - Physical Therapy Visit Limits
 Outpatient physical therapy (CPT 97110) is covered up to 20 visits per
 calendar year without prior authorization. Additional visits beyond the
 20-visit limit require a submitted treatment plan and prior
-authorization.
+authorization. Visits beyond the 20-visit limit that lack both a
+submitted treatment plan and a documented prior authorization will be
+denied.
