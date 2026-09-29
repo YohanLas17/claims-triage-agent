@@ -15,8 +15,10 @@ tool-use APIs converge on today.
 from __future__ import annotations
 
 import json
+import random
+import time
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 
 @dataclass(frozen=True)
@@ -144,6 +146,98 @@ class ReferenceScriptLLMClient:
         return script[turn]
 
 
+def to_openai_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Convert the agent's vendor-neutral transcript into OpenAI wire format.
+
+    ``agent.py`` (and ``agent_langgraph.py`` via the same helper) keeps
+    the running conversation in a deliberately simple internal shape:
+    assistant tool calls as ``{"id", "name", "arguments": dict}`` and tool
+    results with a ``"name"`` key for readability. Neither is valid on
+    the wire: the Chat Completions API (and OpenAI-compatible endpoints
+    such as Gemini's) requires assistant tool calls as
+    ``{"id", "type": "function", "function": {"name", "arguments": <JSON
+    string>}}`` and rejects an unexpected ``"name"`` key on ``tool``
+    messages. This function does that rewrite, and only that rewrite --
+    it never mutates its input, so ``agent.py`` stays vendor-neutral and
+    callers can keep using the internal shape for the audit trail.
+    """
+    converted: list[dict[str, Any]] = []
+    for message in messages:
+        if message.get("role") == "assistant" and "tool_calls" in message:
+            converted.append(
+                {
+                    "role": "assistant",
+                    "content": message.get("content"),
+                    "tool_calls": [
+                        {
+                            "id": tc["id"],
+                            "type": "function",
+                            "function": {
+                                "name": tc["name"],
+                                "arguments": json.dumps(tc["arguments"]),
+                            },
+                        }
+                        for tc in message["tool_calls"]
+                    ],
+                }
+            )
+        elif message.get("role") == "tool":
+            converted.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": message["tool_call_id"],
+                    "content": message["content"],
+                }
+            )
+        else:
+            converted.append(dict(message))
+    return converted
+
+
+def _parse_tool_call_arguments(raw: str) -> dict[str, Any]:
+    """Parse one tool call's JSON arguments defensively.
+
+    Real models occasionally emit malformed JSON, or valid JSON that
+    isn't an object (e.g. a bare string or list). Either case is handed
+    back to the agent as a sentinel dict rather than raising, so a bad
+    tool call becomes a tool error the model can recover from (see
+    ``agent.py``'s argument validation) instead of crashing the run.
+    """
+    try:
+        parsed = json.loads(raw or "{}")
+    except json.JSONDecodeError:
+        return {"__invalid_json__": raw}
+    if not isinstance(parsed, dict):
+        return {"__invalid_json__": raw}
+    return parsed
+
+
+_MAX_RETRY_ATTEMPTS = 6
+_RETRY_BASE_DELAY_SECONDS = 1.0
+_RETRY_MAX_DELAY_SECONDS = 30.0
+
+
+def _is_retryable_status_error(exc: BaseException) -> bool:
+    """True for rate-limit (429) and server (5xx) errors.
+
+    Duck-typed on a ``status_code`` attribute rather than importing and
+    matching ``openai.APIStatusError`` subclasses directly, which keeps
+    this function trivially unit-testable with a plain fake exception
+    and works unchanged against any OpenAI-compatible provider whose SDK
+    raises its own status-carrying exception type.
+    """
+    status_code = getattr(exc, "status_code", None)
+    if not isinstance(status_code, int):
+        return False
+    return status_code == 429 or 500 <= status_code < 600
+
+
+def _backoff_delay_seconds(attempt: int) -> float:
+    """Exponential backoff with full jitter, capped at 30s."""
+    base = min(_RETRY_BASE_DELAY_SECONDS * (2**attempt), _RETRY_MAX_DELAY_SECONDS)
+    return base * (0.5 + random.random())
+
+
 class OpenAIChatCompletionsClient:
     """A thin ``LLMClient`` adapter over the OpenAI Chat Completions API.
 
@@ -152,38 +246,70 @@ class OpenAIChatCompletionsClient:
     so nothing else in the codebase needs to know it exists; none of the
     test suite imports this class, so the ``openai`` package is only
     required if you actually construct one of these.
+
+    Because it only talks to ``openai.OpenAI(base_url=...)``, this same
+    class works against any OpenAI-compatible Chat Completions endpoint,
+    not just OpenAI itself -- Gemini's ``v1beta/openai/`` endpoint, a
+    local Ollama server, or anything else that speaks the same wire
+    format.
     """
 
-    def __init__(self, model: str = "gpt-4o-mini", api_key: str | None = None) -> None:
+    def __init__(
+        self,
+        model: str = "gpt-4o-mini",
+        api_key: str | None = None,
+        base_url: str | None = None,
+        temperature: float = 0.0,
+    ) -> None:
         try:
-            import openai  # type: ignore
+            import openai
         except ImportError as exc:  # pragma: no cover - exercised only without the dep
             raise ImportError(
                 "OpenAIChatCompletionsClient requires the 'openai' package. "
                 "Install it with `pip install openai`, or use FakeLLMClient "
                 "for tests."
             ) from exc
-        self._client = openai.OpenAI(api_key=api_key)
+        self._client = openai.OpenAI(api_key=api_key, base_url=base_url)
         self._model = model
+        self._temperature = temperature
+
+    @property
+    def model(self) -> str:
+        return self._model
 
     def complete(
         self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
     ) -> LLMResponse:
-        openai_tools = [
-            {"type": "function", "function": schema} for schema in tools
-        ]
-        response = self._client.chat.completions.create(
-            model=self._model,
-            messages=messages,
-            tools=openai_tools,
-        )
+        openai_messages = to_openai_messages(messages)
+        openai_tools = [{"type": "function", "function": schema} for schema in tools]
+
+        response = None
+        for attempt in range(_MAX_RETRY_ATTEMPTS):
+            try:
+                response = self._client.chat.completions.create(
+                    model=self._model,
+                    messages=cast(Any, openai_messages),
+                    tools=cast(Any, openai_tools),
+                    temperature=self._temperature,
+                )
+                break
+            except Exception as exc:
+                if not _is_retryable_status_error(exc) or attempt == _MAX_RETRY_ATTEMPTS - 1:
+                    raise
+                time.sleep(_backoff_delay_seconds(attempt))
+        assert response is not None  # the loop above always returns or raises
+
         message = response.choices[0].message
-        tool_calls = [
-            ToolCall(
-                id=tc.id,
-                name=tc.function.name,
-                arguments=json.loads(tc.function.arguments or "{}"),
+        tool_calls: list[ToolCall] = []
+        for tc in message.tool_calls or []:
+            function = getattr(tc, "function", None)
+            if function is None:  # a non-function ("custom") tool call; not supported here
+                continue
+            tool_calls.append(
+                ToolCall(
+                    id=tc.id,
+                    name=function.name,
+                    arguments=_parse_tool_call_arguments(function.arguments),
+                )
             )
-            for tc in (message.tool_calls or [])
-        ]
         return LLMResponse(tool_calls=tool_calls, content=message.content or "")

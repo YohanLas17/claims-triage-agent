@@ -157,6 +157,98 @@ def test_agent_flags_when_model_never_calls_submit_decision():
     assert trail.decision.override_reason == "missing_submit_decision_call"
 
 
+def test_agent_recovers_from_bad_tool_arguments_instead_of_crashing():
+    """A tool call with a misnamed/missing argument (e.g. a malformed JSON
+    payload that came through as {"__invalid_json__": ...}, or simply a
+    typo'd argument name) must not crash the run -- it's returned to the
+    model as a tool error, and the model can recover from it.
+    """
+    claim = _load_claim("CLM-1004")
+    script = [
+        LLMResponse(
+            tool_calls=[
+                ToolCall(id="1", name="lookup_policy", arguments={"__invalid_json__": "{bad"})
+            ]
+        ),
+        LLMResponse(
+            tool_calls=[
+                ToolCall(id="2", name="lookup_policy", arguments={"policy_id": "POL-2002"})
+            ]
+        ),
+        LLMResponse(
+            tool_calls=[
+                ToolCall(
+                    id="3",
+                    name="submit_decision",
+                    arguments={
+                        "status": "denied",
+                        "justification": "CPT 27447 is not on this plan's covered-procedures list.",
+                        "cited_passage_ids": [],
+                    },
+                )
+            ]
+        ),
+    ]
+    agent = ClaimsTriageAgent(FakeLLMClient(script), BM25Retriever())
+    trail = agent.run(claim)
+
+    assert trail.decision.status == DecisionStatus.DENIED
+    first_call = trail.tool_calls[0]
+    assert first_call.tool_name == "lookup_policy"
+    assert "error" in first_call.result
+    assert [tc.tool_name for tc in trail.tool_calls] == [
+        "lookup_policy",
+        "lookup_policy",
+        "submit_decision",
+    ]
+
+
+def test_agent_recovers_from_invalid_submit_decision_status():
+    """An invalid or missing status/justification on submit_decision must
+    be returned to the model as a tool error so it can retry, rather than
+    raising and crashing the whole run -- still bounded by max_tool_calls.
+    """
+    claim = _load_claim("CLM-1004")
+    script = [
+        LLMResponse(
+            tool_calls=[
+                ToolCall(
+                    id="1",
+                    name="submit_decision",
+                    arguments={"status": "not_a_real_status", "justification": "..."},
+                )
+            ]
+        ),
+        LLMResponse(
+            tool_calls=[
+                ToolCall(id="2", name="submit_decision", arguments={"status": "denied"})
+            ]
+        ),
+        LLMResponse(
+            tool_calls=[
+                ToolCall(
+                    id="3",
+                    name="submit_decision",
+                    arguments={
+                        "status": "denied",
+                        "justification": "CPT 27447 is not on this plan's covered-procedures list.",
+                        "cited_passage_ids": [],
+                    },
+                )
+            ]
+        ),
+    ]
+    agent = ClaimsTriageAgent(FakeLLMClient(script), BM25Retriever())
+    trail = agent.run(claim)
+
+    assert trail.decision.status == DecisionStatus.DENIED
+    assert trail.decision.override_reason is None
+    error_calls = [
+        tc for tc in trail.tool_calls if tc.tool_name == "submit_decision" and "error" in tc.result
+    ]
+    assert len(error_calls) == 2
+
+
 def test_audit_trail_captures_full_sequence_with_timestamps():
     claim = _load_claim("CLM-1004")
     script = [
