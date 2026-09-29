@@ -93,6 +93,37 @@ def test_to_openai_messages_does_not_mutate_input():
     assert original == snapshot
 
 
+def test_to_openai_messages_round_trips_provider_extra():
+    """Some providers (Gemini's OpenAI-compatible endpoint) attach opaque
+    extension fields to a tool call, e.g. extra_content.google.thought_signature,
+    and reject the next turn if it isn't echoed back verbatim. That data
+    must survive the conversion unmodified, as a sibling of id/type/function.
+    """
+    messages = [
+        {
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "id": "1",
+                    "name": "lookup_policy",
+                    "arguments": {"policy_id": "POL-1001"},
+                    "provider_extra": {
+                        "extra_content": {"google": {"thought_signature": "abc123"}}
+                    },
+                }
+            ],
+        }
+    ]
+    converted = to_openai_messages(messages)
+
+    assert converted[0]["tool_calls"][0] == {
+        "id": "1",
+        "type": "function",
+        "function": {"name": "lookup_policy", "arguments": '{"policy_id": "POL-1001"}'},
+        "extra_content": {"google": {"thought_signature": "abc123"}},
+    }
+
+
 def test_to_openai_messages_passes_through_plain_messages_unchanged():
     messages = [{"role": "user", "content": "hello"}]
     converted = to_openai_messages(messages)

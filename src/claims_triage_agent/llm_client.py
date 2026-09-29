@@ -23,11 +23,21 @@ from typing import Any, Protocol, cast
 
 @dataclass(frozen=True)
 class ToolCall:
-    """One tool call requested by the model."""
+    """One tool call requested by the model.
+
+    ``provider_extra`` carries opaque, vendor-specific fields the agent
+    loop must round-trip back to the provider unmodified but has no
+    reason to understand -- e.g. Gemini's OpenAI-compatible endpoint
+    attaches an ``extra_content.google.thought_signature`` to every
+    function-call part and rejects the next turn if it isn't echoed
+    back verbatim. Empty for providers (and FakeLLMClient) that don't
+    need this.
+    """
 
     id: str
     name: str
     arguments: dict[str, Any]
+    provider_extra: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -176,6 +186,7 @@ def to_openai_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
                                 "name": tc["name"],
                                 "arguments": json.dumps(tc["arguments"]),
                             },
+                            **tc.get("provider_extra", {}),
                         }
                         for tc in message["tool_calls"]
                     ],
@@ -305,11 +316,13 @@ class OpenAIChatCompletionsClient:
             function = getattr(tc, "function", None)
             if function is None:  # a non-function ("custom") tool call; not supported here
                 continue
+            provider_extra = dict(getattr(tc, "model_extra", None) or {})
             tool_calls.append(
                 ToolCall(
                     id=tc.id,
                     name=function.name,
                     arguments=_parse_tool_call_arguments(function.arguments),
+                    provider_extra=provider_extra,
                 )
             )
         return LLMResponse(tool_calls=tool_calls, content=message.content or "")

@@ -311,7 +311,12 @@ class ClaimsTriageAgent:
                 {
                     "role": "assistant",
                     "tool_calls": [
-                        {"id": tc.id, "name": tc.name, "arguments": tc.arguments}
+                        {
+                            "id": tc.id,
+                            "name": tc.name,
+                            "arguments": tc.arguments,
+                            "provider_extra": tc.provider_extra,
+                        }
                         for tc in response.tool_calls
                     ],
                 }
