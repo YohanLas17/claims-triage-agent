@@ -36,6 +36,7 @@ import json
 import os
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -52,7 +53,7 @@ from claims_triage_agent.evaluation import (  # noqa: E402
     summarize,
     summarize_consistency,
 )
-from claims_triage_agent.llm_client import FakeLLMClient  # noqa: E402
+from claims_triage_agent.llm_client import FakeLLMClient, QuotaExceededError  # noqa: E402
 from claims_triage_agent.retriever import BM25Retriever  # noqa: E402
 from claims_triage_agent.schema import AuditTrail  # noqa: E402
 
@@ -100,15 +101,52 @@ def _run_one(
 
 
 def _run_all_cases(
-    args: argparse.Namespace, cases: list[dict[str, Any]], retriever: BM25Retriever
-) -> list[CaseResult]:
-    results: list[CaseResult] = []
-    for i, case in enumerate(cases):
+    args: argparse.Namespace,
+    cases: list[dict[str, Any]],
+    retriever: BM25Retriever,
+    *,
+    results: list[CaseResult],
+    on_case_done: Callable[[], None],
+) -> None:
+    """Run every case in ``cases`` not already scored in ``results``.
+
+    ``results`` is mutated in place (appended to) rather than returned,
+    so a caller that already has some entries in it (resuming a run
+    that was interrupted partway through) only pays for the remaining
+    cases. ``on_case_done`` is called after each new result is appended,
+    so the caller can checkpoint progress to disk immediately -- if a
+    later case raises (e.g. ``QuotaExceededError``), everything up to
+    that point is already saved.
+    """
+    already_done = {r.claim_id for r in results}
+    pending = [c for c in cases if c["claim_id"] not in already_done]
+    for i, case in enumerate(pending):
         trail = _run_one(args, case, retriever)
         results.append(result_from_trail(case, trail))
-        if args.sleep and i < len(cases) - 1:
+        on_case_done()
+        if args.sleep and i < len(pending) - 1:
             time.sleep(args.sleep)
-    return results
+
+
+def _checkpoint_path(out_base: Path) -> Path:
+    return out_base.with_name(out_base.name + ".partial.json")
+
+
+def _load_checkpoint(path: Path) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    with open(path, encoding="utf-8") as f:
+        result: dict[str, Any] = json.load(f)
+        return result
+
+
+def _save_checkpoint(path: Path, data: dict[str, Any]) -> None:
+    """Write atomically (write-then-rename) so a crash mid-write can't
+    leave a truncated, unreadable checkpoint behind."""
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+    tmp.replace(path)
 
 
 def _default_out_path(args: argparse.Namespace) -> Path:
@@ -141,7 +179,20 @@ def main() -> None:
     parser.add_argument(
         "--out", default=None, help="Output path base (writes <out>.md and <out>.json)."
     )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help=(
+            "Resume an interrupted run instead of starting over -- e.g. after a "
+            "provider's daily quota cut a run short. Requires --out to name the "
+            "same base path as the interrupted run; progress lives in "
+            "<out>.partial.json and cases already scored there are not re-run."
+        ),
+    )
     args = parser.parse_args()
+
+    if args.resume and not args.out:
+        parser.error("--resume requires --out (the checkpoint lives at <out>.partial.json)")
 
     cases = _load_cases(Path(args.cases))
     note = None
@@ -155,9 +206,75 @@ def main() -> None:
 
     retriever = BM25Retriever()
 
-    runs: list[list[CaseResult]] = []
-    for _ in range(args.runs):
-        runs.append(_run_all_cases(args, cases, retriever))
+    out_base = Path(args.out) if args.out else _default_out_path(args)
+    out_base.parent.mkdir(parents=True, exist_ok=True)
+    checkpoint_path = _checkpoint_path(out_base)
+    case_ids = [c["claim_id"] for c in cases]
+    model = args.model if args.llm == "openai" else None
+
+    if args.resume:
+        checkpoint = _load_checkpoint(checkpoint_path)
+        if checkpoint is None:
+            parser.error(f"--resume given but no checkpoint found at {checkpoint_path}")
+        assert checkpoint is not None  # parser.error() above always exits
+        if checkpoint["case_ids"] != case_ids:
+            parser.error(
+                f"--resume checkpoint at {checkpoint_path} was built from a different "
+                "--cases file; pass the same --cases used originally."
+            )
+        if checkpoint["llm"] != args.llm or checkpoint["model"] != model:
+            parser.error(
+                f"--resume checkpoint at {checkpoint_path} was recorded for "
+                f"llm={checkpoint['llm']!r} model={checkpoint['model']!r}, not "
+                f"llm={args.llm!r} model={model!r}."
+            )
+        if checkpoint["runs_target"] != args.runs:
+            print(
+                f"Note: resuming with the checkpoint's original --runs="
+                f"{checkpoint['runs_target']} (ignoring --runs={args.runs})."
+            )
+            args.runs = checkpoint["runs_target"]
+    else:
+        checkpoint = {
+            "llm": args.llm,
+            "model": model,
+            "runs_target": args.runs,
+            "case_ids": case_ids,
+            "completed_runs": [],
+        }
+        _save_checkpoint(checkpoint_path, checkpoint)
+
+    runs: list[list[CaseResult]] = [
+        [CaseResult.from_dict(d) for d in run] for run in checkpoint["completed_runs"]
+    ]
+    in_progress: list[CaseResult] = (
+        runs.pop() if runs and len(runs[-1]) < len(cases) else []
+    )
+
+    def _persist() -> None:
+        all_runs = [*runs, in_progress] if in_progress else runs
+        checkpoint["completed_runs"] = [[r.to_dict() for r in run] for run in all_runs]
+        _save_checkpoint(checkpoint_path, checkpoint)
+
+    try:
+        while len(runs) < args.runs:
+            _run_all_cases(
+                args, cases, retriever, results=in_progress, on_case_done=_persist
+            )
+            runs.append(in_progress)
+            in_progress = []
+            _persist()
+    except QuotaExceededError as exc:
+        done = sum(len(r) for r in runs) + len(in_progress)
+        target = args.runs * len(cases)
+        print(f"\nStopping: provider daily quota exhausted ({exc})")
+        print(f"Completed {done}/{target} case-runs; {target - done} remaining.")
+        print(f"Progress saved to {checkpoint_path}.")
+        print(
+            "Resume once quota resets with the same command plus "
+            f"--resume --out {out_base}"
+        )
+        sys.exit(1)
 
     results = runs[-1]
     summary = summarize(results, include_citation_metrics=args.llm not in BASELINES)
@@ -181,8 +298,6 @@ def main() -> None:
         note=note,
     )
 
-    out_base = Path(args.out) if args.out else _default_out_path(args)
-    out_base.parent.mkdir(parents=True, exist_ok=True)
     md_path = out_base.with_suffix(".md")
     json_path = out_base.with_suffix(".json")
 

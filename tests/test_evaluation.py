@@ -159,6 +159,21 @@ def test_result_from_trail_on_the_clm_1001_demo_script():
     assert result.right_for_wrong_reason is False
 
 
+def test_case_result_from_dict_round_trips_to_dict():
+    """``eval/run_eval.py`` reconstructs ``CaseResult``s from its on-disk
+    checkpoint to resume an interrupted run; ``from_dict`` must be the
+    exact inverse of ``to_dict``.
+    """
+    case = next(c for c in EVAL_CASES if c["claim_id"] == "CLM-1001")
+    claim = _load_claim("CLM-1001")
+    agent = ClaimsTriageAgent(FakeLLMClient(DEMO_SCRIPTS["CLM-1001"]), BM25Retriever())
+    result = result_from_trail(case, agent.run(claim))
+
+    restored = CaseResult.from_dict(result.to_dict())
+
+    assert restored == result
+
+
 def test_result_from_trail_flags_right_for_wrong_reason():
     case = {
         "claim_id": "CLM-TEST",

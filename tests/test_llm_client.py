@@ -16,7 +16,9 @@ import pytest
 
 from claims_triage_agent.llm_client import (
     OpenAIChatCompletionsClient,
+    QuotaExceededError,
     _backoff_delay_seconds,
+    _is_daily_quota_exceeded,
     _is_retryable_status_error,
     _parse_tool_call_arguments,
     to_openai_messages,
@@ -184,6 +186,54 @@ def test_is_retryable_status_error_false_without_status_code():
     assert _is_retryable_status_error(ValueError("boom")) is False
 
 
+def _quota_body(quota_id: str) -> dict[str, Any]:
+    """Shape of the error body Gemini's free tier actually returns (see
+    ``eval/results/*.json`` from the run that hit this in production) --
+    a 429 whose real cause is only distinguishable via
+    ``details[].violations[].quotaId``.
+    """
+    return {
+        "code": 429,
+        "status": "RESOURCE_EXHAUSTED",
+        "details": [
+            {
+                "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                "violations": [{"quotaId": quota_id}],
+            }
+        ],
+    }
+
+
+class _FakeStatusErrorWithBody(Exception):
+    def __init__(self, status_code: int, body: Any) -> None:
+        super().__init__(f"status {status_code}")
+        self.status_code = status_code
+        self.body = body
+
+
+def test_is_daily_quota_exceeded_true_for_per_day_violation():
+    quota_id = "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+    exc = _FakeStatusErrorWithBody(429, _quota_body(quota_id))
+    assert _is_daily_quota_exceeded(exc) is True
+
+
+def test_is_daily_quota_exceeded_false_for_per_minute_violation():
+    exc = _FakeStatusErrorWithBody(
+        429, _quota_body("GenerateRequestsPerMinutePerProjectPerModel-FreeTier")
+    )
+    assert _is_daily_quota_exceeded(exc) is False
+
+
+def test_is_daily_quota_exceeded_false_for_non_429():
+    quota_id = "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+    exc = _FakeStatusErrorWithBody(500, _quota_body(quota_id))
+    assert _is_daily_quota_exceeded(exc) is False
+
+
+def test_is_daily_quota_exceeded_false_without_body():
+    assert _is_daily_quota_exceeded(_FakeStatusError(429)) is False
+
+
 def test_backoff_delay_grows_and_is_capped():
     # Base delay doubles per attempt but is capped at 30s before jitter is
     # applied; jitter multiplies by [0.5, 1.5), so the capped delay's
@@ -285,6 +335,29 @@ def test_complete_does_not_retry_on_400(monkeypatch: pytest.MonkeyPatch):
         client.complete([{"role": "user", "content": "hi"}], tools=[])
 
     assert completions.call_count == 1
+
+
+class _DailyQuotaCompletions:
+    """Always fails with a daily-quota-shaped 429."""
+
+    def __init__(self) -> None:
+        self.call_count = 0
+
+    def create(self, **kwargs: Any) -> _FakeResponse:
+        self.call_count += 1
+        raise _FakeStatusErrorWithBody(
+            429, _quota_body("GenerateRequestsPerDayPerProjectPerModel-FreeTier")
+        )
+
+
+def test_complete_raises_quota_exceeded_without_retrying(monkeypatch: pytest.MonkeyPatch):
+    completions = _DailyQuotaCompletions()
+    client = _make_client(monkeypatch, completions)
+
+    with pytest.raises(QuotaExceededError):
+        client.complete([{"role": "user", "content": "hi"}], tools=[])
+
+    assert completions.call_count == 1  # no backoff retry for a per-day cap
 
 
 def test_complete_exposes_model_name(monkeypatch: pytest.MonkeyPatch):

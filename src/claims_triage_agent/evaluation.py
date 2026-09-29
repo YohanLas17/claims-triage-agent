@@ -151,6 +151,33 @@ class CaseResult:
             "right_for_wrong_reason": self.right_for_wrong_reason,
         }
 
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> CaseResult:
+        """Reconstruct a ``CaseResult`` from ``to_dict()``'s output.
+
+        Used by ``eval/run_eval.py`` to resume an interrupted run from
+        its on-disk checkpoint without re-calling the model for cases
+        already scored.
+        """
+        return cls(
+            claim_id=data["claim_id"],
+            category=data["category"],
+            expected_status=data["expected_status"],
+            actual_status=data["actual_status"],
+            requires_rag=data["requires_rag"],
+            expected_cited_chunk=data["expected_cited_chunk"],
+            cited_passage_ids=list(data["cited_passage_ids"]),
+            override_reason=data["override_reason"],
+            justification=data["justification"],
+            searched_policy=data["searched_policy"],
+            retrieved_chunk_ids=list(data["retrieved_chunk_ids"]),
+            decision_correct=data["decision_correct"],
+            citation_correct=data["citation_correct"],
+            outcome=data["outcome"],
+            cause=data["cause"],
+            right_for_wrong_reason=data["right_for_wrong_reason"],
+        )
+
 
 def result_from_trail(case: dict[str, Any], trail: AuditTrail) -> CaseResult:
     """Score one ``AuditTrail`` against its eval case's expected answer."""

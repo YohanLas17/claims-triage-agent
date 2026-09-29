@@ -249,6 +249,48 @@ def _backoff_delay_seconds(attempt: int) -> float:
     return base * (0.5 + random.random())
 
 
+class QuotaExceededError(Exception):
+    """Raised instead of retrying when a 429 is a hard, day-scale quota.
+
+    Discovered running eval against Gemini's free tier: its
+    ``generate_content_free_tier_requests`` quota caps some models at as
+    few as 20 requests *per day*, and a 429 for that violation is
+    wire-identical to an ordinary per-minute rate limit except for which
+    ``quotaId`` it names. Retrying a per-day cap with the backoff below
+    (max ~30s a step) can never succeed and would just burn the
+    remaining attempts for nothing, so ``complete()`` special-cases it
+    and raises immediately instead. Callers that run many cases in a
+    loop (``eval/run_eval.py``) can catch this specifically to stop
+    cleanly and save partial progress, rather than crashing mid-run.
+    """
+
+
+def _is_daily_quota_exceeded(exc: BaseException) -> bool:
+    """True for a 429 whose Google quota violation is a per-day cap.
+
+    Duck-typed on ``status_code`` and ``body`` like
+    ``_is_retryable_status_error`` above -- costs nothing for providers
+    that set neither. Google's Gemini API reports which quota was hit in
+    ``body["details"]``, a list of typed objects; a ``QuotaFailure``
+    entry's ``violations[].quotaId`` names the specific quota (e.g.
+    ``GenerateRequestsPerDayPerProjectPerModel-FreeTier`` vs. the
+    per-minute equivalent) -- only the former can't be outlasted by
+    in-process retrying.
+    """
+    if getattr(exc, "status_code", None) != 429:
+        return False
+    body = getattr(exc, "body", None)
+    if not isinstance(body, dict):
+        return False
+    for detail in body.get("details") or []:
+        if not isinstance(detail, dict):
+            continue
+        for violation in detail.get("violations") or []:
+            if isinstance(violation, dict) and "PerDay" in str(violation.get("quotaId", "")):
+                return True
+    return False
+
+
 class OpenAIChatCompletionsClient:
     """A thin ``LLMClient`` adapter over the OpenAI Chat Completions API.
 
@@ -305,6 +347,8 @@ class OpenAIChatCompletionsClient:
                 )
                 break
             except Exception as exc:
+                if _is_daily_quota_exceeded(exc):
+                    raise QuotaExceededError(str(exc)) from exc
                 if not _is_retryable_status_error(exc) or attempt == _MAX_RETRY_ATTEMPTS - 1:
                     raise
                 time.sleep(_backoff_delay_seconds(attempt))
