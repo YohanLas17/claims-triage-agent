@@ -1,0 +1,10 @@
+{
+  "claim_id": "CLM-1030",
+  "patient_id": "PAT-029",
+  "policy_id": "POL-1001",
+  "procedure_code": "27447",
+  "procedure_description": "Total knee arthroplasty",
+  "billed_amount": 36100.0,
+  "date_of_service": "2026-09-20",
+  "notes": "Elective total knee replacement. Prior authorization reference PA-63290 is on file, but the date the authorization was obtained is not documented, so it cannot be confirmed whether it was requested at least 14 days before the procedure."
+}

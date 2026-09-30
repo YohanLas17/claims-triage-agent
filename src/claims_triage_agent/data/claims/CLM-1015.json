@@ -1,0 +1,10 @@
+{
+  "claim_id": "CLM-1015",
+  "patient_id": "PAT-015",
+  "policy_id": "POL-1001",
+  "procedure_code": "97110",
+  "procedure_description": "Therapeutic exercise, physical therapy",
+  "billed_amount": 95.0,
+  "date_of_service": "2026-09-02",
+  "notes": "This is the patient's 18th outpatient physical therapy visit (CPT 97110) of the calendar year. A prior authorization reference PA-44120 is on file, though the visit count is still within the 20-visit annual limit."
+}

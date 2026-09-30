@@ -1,0 +1,10 @@
+{
+  "claim_id": "CLM-1013",
+  "patient_id": "PAT-013",
+  "policy_id": "POL-1001",
+  "procedure_code": "27130",
+  "procedure_description": "Total hip arthroplasty",
+  "billed_amount": 38500.0,
+  "date_of_service": "2026-09-18",
+  "notes": "Elective total hip replacement. Prior authorization reference PA-61810 was obtained on 2026-09-09, only 9 days before the scheduled procedure date."
+}

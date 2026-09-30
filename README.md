@@ -98,9 +98,9 @@ The agent is implemented **twice**, deliberately, sharing the exact same
 - **`agent_langgraph.LangGraphClaimsTriageAgent`** — the same agent as an
   explicit LangGraph `StateGraph`: real nodes/conditional edges, a
   `ToolNode`, an `InMemorySaver` checkpointer, and a genuine
-  `interrupt()` call for Human-in-the-Loop review (see below). This is
-  the industry-standard 2026 orchestration primitive, built explicitly
-  rather than hidden behind a one-line `create_react_agent(...)` call.
+  `interrupt()` call for Human-in-the-Loop review (see below). The graph
+  is wired node by node, rather than hidden behind a one-line
+  `create_react_agent(...)` call.
 
 ```mermaid
 flowchart TD
@@ -154,6 +154,15 @@ in `tests/test_agent.py`
 (`test_agent_forces_flagged_for_review_when_tool_call_budget_is_exceeded`,
 `test_agent_forces_flagged_for_review_when_rag_is_empty_and_uncited`).
 
+**Malformed model output never crashes a run or becomes a decision.**
+Tool-call arguments that aren't valid JSON, or that fail validation
+(wrong or missing arguments, or a `submit_decision` with an invalid
+`status` or an empty justification), go back to the model as a tool
+error it can recover from, and that retry still counts toward the tool-call
+budget. If the model answers in free text instead of calling
+`submit_decision`, the prose is never parsed into a decision: the run is
+flagged for review with `override_reason="missing_submit_decision_call"`.
+
 ## Proving the RAG path is load-bearing
 
 `data/claims/CLM-1001.json` is a skin-tag-removal claim where the
@@ -165,6 +174,118 @@ citing the free-text cosmetic-exclusion clause in `POL-1001.txt` (Section
 `tests/test_agent.py::test_agent_denies_cosmetic_removal_using_only_the_free_text_clause`
 and is `eval/eval_cases.json`'s first case — and it's exactly what the
 screenshot above shows happening live.
+
+## Evaluation
+
+`eval/eval_cases.json` holds 30 labeled cases: 15 are expected `approved`,
+8 `denied` and 7 `flagged_for_review`. 21 of them need the free-text
+policy documents, so they can't be decided from the structured coverage
+table alone.
+
+| Category | Cases | What it tests |
+|---|---|---|
+| `routine_approval` | 2 | Clean, in-network claims that should just be approved |
+| `missing_coverage` | 2 | Procedure code absent from the plan's coverage table |
+| `cosmetic_exclusion` | 4 | Free-text cosmetic exclusions, and the medical-necessity carve-outs that override them |
+| `cross_policy_confusion` | 1 | Same wording as an excluded claim, but under a plan with no such exclusion |
+| `prior_auth` | 5 | Prior-auth present, missing, too late, or with an undocumented date |
+| `prior_auth_waiver` | 2 | Emergency-department waiver of the prior-auth rule |
+| `visit_limit` | 4 | Annual visit cap that exists only in free text, and its exceptions |
+| `repeat_procedure` | 3 | Same-joint repeat within a 90-day window vs. different joint / outside it |
+| `network` | 2 | HMO out-of-network exclusion and its documented-emergency exception |
+| `missing_documentation` | 1 | Deciding fact not documented either way, so it must go to a human |
+| `data_integrity` | 2 | Unknown patient, or a claim filed under the wrong policy |
+| `duplicate_billing` | 1 | Same patient, procedure and date as an already-approved claim |
+| `prompt_injection` | 1 | A fake "note to the AI reviewer" embedded in the claim text |
+
+### Baselines
+
+Two deterministic baselines (no model, no API key) set the floor that any
+real model has to beat. These are the numbers `eval/run_eval.py` printed
+for them (reports in `eval/results/`):
+
+| Backend | Accuracy | Unsafe auto-decision rate | Wrongful approval rate |
+|---|---|---|---|
+| `baseline-approve` (approve everything) | 50.0% | 100.0% | 100.0% |
+| `baseline-structured` (structured coverage table only, no free text) | 43.3% | 100.0% | 62.5% |
+
+- **Unsafe auto-decision rate** is the share of cases that should have
+  gone to a human (`flagged_for_review`) but were auto-decided instead.
+- **Wrongful approval rate** is the share of should-be-denied cases that
+  were approved.
+
+### Why accuracy alone misleads
+
+Approving every claim scores 50% here, higher than the baseline that
+actually reads the coverage table, because half the cases are
+legitimately `approved`. That 50% still comes with a 100% wrongful
+approval rate and a 100% unsafe auto-decision rate. In claims
+adjudication those errors cost very different amounts, so the harness
+also reports the error rates, an over-flag rate, a confusion matrix,
+per-category accuracy and, for real models, citation accuracy and a
+"right for the wrong reason" count. That last one covers a correct
+status reached without citing the clause that actually decides the case.
+
+### Failure taxonomy
+
+Every wrong decision is classified twice: by *outcome* (what went wrong)
+and by *cause* (why). The logic lives in
+`claims_triage_agent.evaluation` and is unit tested in
+`tests/test_evaluation.py`.
+
+| Outcome (worst first) | Meaning |
+|---|---|
+| `unsafe_auto_decision` | Should have been flagged for a human, but was approved or denied |
+| `wrongful_approval` | Should have been denied, was approved |
+| `wrongful_denial` | Should have been approved, was denied |
+| `over_flagging` | Was decidable, but was sent to a human anyway |
+
+| Cause | Meaning |
+|---|---|
+| `guardrail_override` | A reliability guardrail overrode the model's decision |
+| `never_searched_policy` | The case needed the free-text policy, and the agent never searched it |
+| `retrieval_miss` | The agent searched, but the deciding clause was not retrieved |
+| `misapplied_clause` | The deciding clause was retrieved, but applied wrongly |
+| `reasoning_without_clause` | Wrong on a case that doesn't hinge on a free-text clause |
+
+### Running it
+
+```bash
+# Baselines: no API key, no network
+python eval/run_eval.py --llm baseline-approve
+python eval/run_eval.py --llm baseline-structured
+
+# Gemini free tier, via its OpenAI-compatible endpoint
+export GEMINI_API_KEY=...
+python eval/run_eval.py --llm openai \
+    --model gemini-2.5-flash \
+    --base-url https://generativelanguage.googleapis.com/v1beta/openai/ \
+    --api-key-env GEMINI_API_KEY --runs 3 --sleep 4 \
+    --out eval/results/gemini-2.5-flash
+# If the daily quota cuts the run short, rerun the same command with
+# --resume after the quota resets. Progress is kept in <out>.partial.json.
+
+# Local open-weights model via Ollama (no quota; Ollama ignores the key)
+ollama pull qwen2.5:7b
+export OLLAMA_API_KEY=ollama
+python eval/run_eval.py --llm openai \
+    --model qwen2.5:7b \
+    --base-url http://localhost:11434/v1 \
+    --api-key-env OLLAMA_API_KEY --runs 3 \
+    --out eval/results/qwen2.5-7b
+```
+
+Each run writes a Markdown report and a JSON report. Real-model reports
+include the baselines side by side. With `--runs` greater than 1, the
+report also shows how consistent the decisions were across runs.
+
+### Results with a real model
+
+In progress: a full 3-run evaluation on an open-weights model (qwen2.5:7b
+via Ollama) is running, after the Gemini free tier's daily quota proved
+too small for 30 cases x 3 runs. This section will be updated with the
+real numbers and the failure analysis. The harness and the baselines
+above are complete and reproducible today.
 
 ## Demo (no API key needed)
 
@@ -248,16 +369,7 @@ docker run -p 8000:8000 -e OPENAI_API_KEY=sk-... claims-triage-agent
 CI (`.github/workflows/ci.yml`) runs `ruff check`, `mypy`, `pytest`, and
 a Docker build on every push/PR to `main`.
 
-## Testing status
-
-This project was originally written in a sandboxed environment with no
-network access, so `agent_langgraph.py`, `tests/test_agent_langgraph.py`,
-`api.py` and `tests/test_api.py` were only hand-reviewed, never actually
-run. That gap has since been closed: `ruff`, `mypy` and the full `pytest`
-suite have now all been run for real, with network access, against the
-dependency versions below.
-
-Versions actually installed and tested against:
+## Tested versions
 
 | Package | Version |
 |---|---|
@@ -267,11 +379,76 @@ Versions actually installed and tested against:
 | fastapi | 0.141.1 |
 | pydantic | 2.13.5 |
 
-`pyproject.toml`/`requirements.txt` pin `langgraph>=1.0` and
-`langchain-core>=1.0`: pre-1.0 releases of both have a materially
-different `StateGraph.invoke()`/checkpointer API (no `version=` overload
-split, different `RunnableConfig` typing expectations) and are **not**
-compatible with `agent_langgraph.py` as written. The original
-`>=0.2`/`>=0.3` floors in an earlier revision of this file were wrong —
-they were guesses made without network access to actually check.
+`langgraph` and `langchain-core` must be `>=1.0`: pre-1.0 releases have a
+different `StateGraph.invoke()`/checkpointer API and are not compatible
+with `agent_langgraph.py`.
 
+## Production considerations
+
+- **Why a full audit trail, not just debug logs.** In a HIPAA-adjacent
+  claims workflow, "why did the system decide this" has to be answerable
+  after the fact, by someone who wasn't in the loop when it happened. The
+  audit trail (`audit.py`, `schema.AuditTrail`) is therefore modeled as a
+  first-class, structured record — every tool call, its arguments, its
+  result, a timestamp, and any passages cited — written to disk as JSON
+  per run, rather than free-text log lines. It's designed to answer a
+  compliance question directly, not to be grepped by an engineer
+  debugging a stack trace.
+- **Why force `flagged_for_review` instead of trusting the model.** An LLM
+  that is uncertain will often still produce a confident-sounding
+  approve/deny. In a claims context, a wrong automated denial or approval
+  has real financial and care consequences, while a false
+  `flagged_for_review` just costs a human reviewer a few minutes. The two
+  guardrails above are intentionally asymmetric: they only ever push a
+  decision *up* in caution (toward `flagged_for_review`), never make an
+  automated decision more confident than the model's own tool use
+  supports.
+
+## Limitations (no overclaiming)
+
+- The eval harness's `fake-reference` mode replays hand-written, known-
+  correct trajectories. It proves the harness plumbing works end-to-end
+  offline; it is **not** a measurement of any LLM's actual adjudication
+  quality. A real accuracy number requires running `--llm openai` against
+  a model endpoint; see "Results with a real model" above.
+- The eval set is 30 synthetic claims over 2 synthetic policies. It is
+  built to exercise specific failure modes, not to be statistically
+  representative of real claim variety, so results on it are a
+  regression check, not a measure of real-world accuracy.
+- BM25 is a lexical retriever: it will miss a relevant clause that uses
+  different wording than the query (e.g. a query about "cosmetic" won't
+  find a clause that only says "aesthetic, non-restorative procedures").
+  A production system handling open-ended clinical language would likely
+  need a hybrid lexical + embedding retriever.
+- The LangGraph checkpointer used here (`InMemorySaver`) does not survive
+  a process restart. A deployment that needs a human review to actually
+  outlive the API process restarting would swap in
+  `langgraph.checkpoint.postgres.PostgresSaver` (or similar) — a
+  one-line change since `agent_langgraph.py` only depends on the
+  checkpointer interface, not the in-memory implementation specifically.
+- There is no production observability yet. The JSON audit trail answers
+  "why was this decided", but a multi-service deployment would add
+  OpenTelemetry tracing and metrics on latency, cost and flag rates.
+
+## Repository layout
+
+```
+src/claims_triage_agent/
+  schema.py          domain dataclasses (Claim, Decision, AuditTrail, ...)
+  llm_client.py       LLMClient protocol, FakeLLMClient, ReferenceScriptLLMClient, OpenAIChatCompletionsClient
+  demo_scripts.py     DEMO_SCRIPTS: the known-correct trajectories shared by run_eval.py and demo.py
+  tools.py            lookup_policy, check_prior_claims, calculate_coverage
+  retriever.py         Retriever protocol + from-scratch BM25Retriever
+  agent.py             ClaimsTriageAgent: the hand-rolled tool-calling loop + guardrails
+  agent_langgraph.py   LangGraphClaimsTriageAgent: the same agent as a StateGraph, with HITL
+  evaluation.py        eval scoring: metrics, baselines, failure taxonomy
+  audit.py             writes AuditTrail to disk as JSON
+  api.py               FastAPI POST /adjudicate (uses ClaimsTriageAgent)
+  server.py            production ASGI entrypoint (`uvicorn claims_triage_agent.server:app`)
+  demo.py              no-API-key ASGI entrypoint (`uvicorn claims_triage_agent.demo:app`)
+  data/               synthetic policies.json, patients.json, policy_documents/, claims/
+tests/                pytest suite (tools, retriever, agent, agent_langgraph, api, demo, evaluation, llm_client, run_eval)
+eval/                 eval_cases.json (30 labeled cases), run_eval.py, results/ (baseline reports)
+Dockerfile, .dockerignore
+.github/workflows/ci.yml   ruff + mypy + pytest + docker build, on push/PR to main
+```

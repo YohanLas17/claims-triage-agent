@@ -1,0 +1,10 @@
+{
+  "claim_id": "CLM-1008",
+  "patient_id": "PAT-008",
+  "policy_id": "POL-1001",
+  "procedure_code": "11200",
+  "procedure_description": "Removal of skin tags, up to and including 15 lesions",
+  "billed_amount": 410.0,
+  "date_of_service": "2026-09-06",
+  "notes": "Patient requested removal of a skin tag on the shoulder. The visit note does not specify whether the lesion was symptomatic (irritation, bleeding, infection) or removed for cosmetic preference; the treating physician's documentation is incomplete on this point."
+}

@@ -1,0 +1,10 @@
+{
+  "claim_id": "CLM-1012",
+  "patient_id": "PAT-012",
+  "policy_id": "POL-1001",
+  "procedure_code": "27447",
+  "procedure_description": "Total knee arthroplasty",
+  "billed_amount": 34800.0,
+  "date_of_service": "2026-09-12",
+  "notes": "Elective total knee replacement. No prior authorization reference number is documented anywhere in the claim."
+}

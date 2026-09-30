@@ -5,12 +5,20 @@ import pytest
 from fastapi.testclient import TestClient
 
 from claims_triage_agent.demo import app
+from claims_triage_agent.demo_scripts import DEMO_SCRIPTS
 
 CLAIMS_DIR = Path(__file__).parent.parent / "src" / "claims_triage_agent" / "data" / "claims"
 EVAL_CASES_PATH = Path(__file__).parent.parent / "eval" / "eval_cases.json"
 
 with open(EVAL_CASES_PATH, encoding="utf-8") as f:
-    EVAL_CASES = json.load(f)
+    _ALL_EVAL_CASES = json.load(f)
+
+# demo.py wires ReferenceScriptLLMClient, which only knows how to answer for
+# the claim ids scripted in DEMO_SCRIPTS -- it is not a real model and
+# cannot adjudicate the other, real-model-only eval cases. Parametrizing
+# over the full eval set here would fail every case demo.py was never meant
+# to support.
+EVAL_CASES = [c for c in _ALL_EVAL_CASES if c["claim_id"] in DEMO_SCRIPTS]
 
 
 def _load_claim(claim_id: str) -> dict:

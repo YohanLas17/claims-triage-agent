@@ -1,0 +1,10 @@
+{
+  "claim_id": "CLM-1028",
+  "patient_id": "PAT-027",
+  "policy_id": "POL-1001",
+  "procedure_code": "29881",
+  "procedure_description": "Arthroscopy, knee, surgical; with meniscectomy",
+  "billed_amount": 9800.0,
+  "date_of_service": "2026-09-17",
+  "notes": "First-time arthroscopic knee surgery for a torn meniscus, no prior knee claims on file. In-network provider."
+}

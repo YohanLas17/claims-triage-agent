@@ -174,6 +174,30 @@ def _build_claim_message(claim: dict[str, Any]) -> str:
     return "Adjudicate this claim:\n" + json.dumps(claim, indent=2)
 
 
+def _validate_submit_decision_args(args: dict[str, Any]) -> tuple[DecisionStatus, str]:
+    """Validate a submit_decision call's arguments, raising ``ToolError`` on
+    anything a real model can plausibly get wrong (an invalid/missing
+    status, a missing/empty justification), so the caller can hand the
+    problem back to the model as a recoverable tool error rather than
+    crashing the run.
+    """
+    if "status" not in args:
+        raise ToolError("submit_decision is missing the required 'status' argument.")
+    try:
+        status = DecisionStatus(args["status"])
+    except ValueError as exc:
+        valid = ", ".join(s.value for s in DecisionStatus)
+        raise ToolError(
+            f"'{args['status']!r}' is not a valid status; must be one of: {valid}."
+        ) from exc
+
+    justification = args.get("justification")
+    if not isinstance(justification, str) or not justification.strip():
+        raise ToolError("submit_decision requires a non-empty 'justification' string.")
+
+    return status, justification
+
+
 def apply_reliability_guardrails(
     status: DecisionStatus, cited_ids: list[str], had_empty_required_search: bool
 ) -> tuple[DecisionStatus, str | None]:
@@ -287,7 +311,12 @@ class ClaimsTriageAgent:
                 {
                     "role": "assistant",
                     "tool_calls": [
-                        {"id": tc.id, "name": tc.name, "arguments": tc.arguments}
+                        {
+                            "id": tc.id,
+                            "name": tc.name,
+                            "arguments": tc.arguments,
+                            "provider_extra": tc.provider_extra,
+                        }
                         for tc in response.tool_calls
                     ],
                 }
@@ -296,7 +325,34 @@ class ClaimsTriageAgent:
             for tool_call in response.tool_calls:
                 if tool_call.name == "submit_decision":
                     args = tool_call.arguments
-                    raw_status = DecisionStatus(args["status"])
+                    try:
+                        raw_status, justification = _validate_submit_decision_args(args)
+                    except ToolError as exc:
+                        # A malformed submit_decision call (invalid/missing
+                        # status or justification) is handed back to the
+                        # model as a tool error, the same as any other bad
+                        # tool call, so it can retry -- still bounded by
+                        # max_tool_calls rather than crashing the run.
+                        call_index += 1
+                        error_result = {"error": str(exc)}
+                        trail.tool_calls.append(
+                            ToolCallRecord(
+                                call_index=call_index,
+                                tool_name="submit_decision",
+                                arguments=args,
+                                result=error_result,
+                            )
+                        )
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tool_call.id,
+                                "name": "submit_decision",
+                                "content": json.dumps(error_result),
+                            }
+                        )
+                        continue
+
                     cited_ids = list(args.get("cited_passage_ids", []) or [])
 
                     status, override_reason = apply_reliability_guardrails(
@@ -305,7 +361,7 @@ class ClaimsTriageAgent:
 
                     decision = Decision(
                         status=status,
-                        justification=args["justification"],
+                        justification=justification,
                         cited_passage_ids=cited_ids,
                         override_reason=override_reason,
                     )
@@ -331,6 +387,15 @@ class ClaimsTriageAgent:
                         had_empty_required_search = True
                 except ToolError as exc:
                     result, cited_passages = {"error": str(exc)}, []
+                except (TypeError, KeyError) as exc:
+                    # Wrong or missing tool arguments (e.g. a malformed
+                    # tool call, or an unexpected/misnamed argument) are
+                    # returned to the model as a tool error instead of
+                    # crashing the run.
+                    result, cited_passages = (
+                        {"error": f"Invalid arguments for {tool_call.name}: {exc}"},
+                        [],
+                    )
 
                 trail.tool_calls.append(
                     ToolCallRecord(

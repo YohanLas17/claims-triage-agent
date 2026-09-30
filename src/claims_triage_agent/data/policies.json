@@ -11,9 +11,11 @@
       "29881": true,
       "97110": true,
       "11200": true,
-      "99213": true
+      "99213": true,
+      "27447": true,
+      "27130": true
     },
-    "requires_prior_auth": ["27447"]
+    "requires_prior_auth": ["27447", "27130"]
   },
   "POL-2002": {
     "policy_id": "POL-2002",
