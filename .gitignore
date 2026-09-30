@@ -11,3 +11,5 @@ src/claims_triage_agent/data/audit_logs/*.json
 .env
 
 .idea/
+
+eval/results/*.partial.json

@@ -13,7 +13,7 @@ mypy>=1.11
 langgraph>=1.0
 langchain-core>=1.0
 
-# openai>=1.30       # only needed for llm_client.OpenAIChatCompletionsClient
+openai>=1.30  # used by llm_client.OpenAIChatCompletionsClient and its tests
 # langchain-openai>=0.2  # only needed to run agent_langgraph.py against a real OpenAI model
 # langsmith>=0.1     # optional: set LANGCHAIN_TRACING_V2=true + LANGCHAIN_API_KEY to get
 #                      full LangSmith traces of every LangGraph run for free, no code change
