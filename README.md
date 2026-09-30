@@ -9,17 +9,24 @@ All data (patients, policies, claims, policy documents) is **synthetic and
 invented** for this repository. No real patient data, real payer data, or
 proprietary code is used anywhere here.
 
+**A live request against `POST /adjudicate`** — the structured data says
+this procedure is covered, but the agent finds and cites the free-text
+exclusion clause that says otherwise, and denies the claim:
+
+<img width="850" alt="Request: a skin-tag removal claim, billed as covered" src="https://github.com/user-attachments/assets/eb923ae6-5a57-40d9-9d73-4040c308979e" />
+<img width="850" alt="Response: denied, citing the cosmetic-exclusion clause, with full audit trail" src="https://github.com/user-attachments/assets/d5c9d387-36f9-4171-806a-c124b76e9f20" />
+
 ## Why this project
 
-I built this as a public, from-scratch demonstration of the kind of system
-described in ClarityCare AI's AI Engineer (V.I.E.) role: an LLM agent that
-reads and reasons over clinical/administrative documents for US health
-insurers, with reliability and auditability as first-class requirements
-rather than an afterthought. It mirrors, on an invented scenario, the
-architecture pattern I worked with in my first professional experience
-building a production LLM agent (document agents, RAG, tool
-orchestration) — nothing here is copied from that codebase; it is the
-same category of engineering decisions, applied to public synthetic data.
+I built this as a public, from-scratch demonstration of what I consider
+core to AI engineering in healthtech: an LLM agent that reads and reasons
+over clinical/administrative documents, with reliability and auditability
+treated as first-class requirements rather than an afterthought. It
+mirrors, on an invented scenario, the architecture pattern I worked with
+in my first professional experience building a production LLM agent
+(document agents, RAG, tool orchestration) — nothing here is copied from
+that codebase; it is the same category of engineering decisions, applied
+to public synthetic data.
 
 ## Stack
 
@@ -109,8 +116,8 @@ flowchart TD
     HR --> END
 ```
 
-Why build it twice rather than just once with LangGraph: it lets me show
-both that I understand what a tool-calling agent loop actually does
+Why build it twice rather than just once with LangGraph: it shows both
+that I understand what a tool-calling agent loop actually does
 underneath, and that I can build the same thing with the framework a
 production team would actually use day to day.
 
@@ -165,7 +172,8 @@ only way to reach the correct `denied` decision is by retrieving and
 citing the free-text cosmetic-exclusion clause in `POL-1001.txt` (Section
 4) via `search_policy_documents`. This case is asserted directly in
 `tests/test_agent.py::test_agent_denies_cosmetic_removal_using_only_the_free_text_clause`
-and is `eval/eval_cases.json`'s first case.
+and is `eval/eval_cases.json`'s first case — and it's exactly what the
+screenshot above shows happening live.
 
 ## Evaluation
 
@@ -365,7 +373,7 @@ a Docker build on every push/PR to `main`.
 
 | Package | Version |
 |---|---|
-| Python | 3.14.0 |
+| Python | 3.12 |
 | langgraph | 1.2.12 |
 | langchain-core | 1.6.4 |
 | fastapi | 0.141.1 |
@@ -401,16 +409,12 @@ with `agent_langgraph.py`.
 - The eval harness's `fake-reference` mode replays hand-written, known-
   correct trajectories. It proves the harness plumbing works end-to-end
   offline; it is **not** a measurement of any LLM's actual adjudication
-  quality. A real accuracy number requires running `--llm openai` (or
-  wiring up another provider) against `eval_cases.json`, which needs an
-  API key and was not run as part of preparing this repository.
-  Similarly, the "100% accuracy" the offline mode reports is a property
-  of the reference scripts, not a claim about model capability.
-- Only 4 synthetic claims and 2 synthetic policies exist. This is enough
-  to exercise every code path (approve, deny, flag, both reliability
-  overrides, RAG-required and RAG-not-required cases) but far too small
-  a sample to say anything about accuracy on real claim variety or edge
-  cases.
+  quality. A real accuracy number requires running `--llm openai` against
+  a model endpoint; see "Results with a real model" above.
+- The eval set is 30 synthetic claims over 2 synthetic policies. It is
+  built to exercise specific failure modes, not to be statistically
+  representative of real claim variety, so results on it are a
+  regression check, not a measure of real-world accuracy.
 - BM25 is a lexical retriever: it will miss a relevant clause that uses
   different wording than the query (e.g. a query about "cosmetic" won't
   find a clause that only says "aesthetic, non-restorative procedures").
@@ -422,6 +426,9 @@ with `agent_langgraph.py`.
   `langgraph.checkpoint.postgres.PostgresSaver` (or similar) — a
   one-line change since `agent_langgraph.py` only depends on the
   checkpointer interface, not the in-memory implementation specifically.
+- There is no production observability yet. The JSON audit trail answers
+  "why was this decided", but a multi-service deployment would add
+  OpenTelemetry tracing and metrics on latency, cost and flag rates.
 
 ## Repository layout
 
@@ -434,13 +441,14 @@ src/claims_triage_agent/
   retriever.py         Retriever protocol + from-scratch BM25Retriever
   agent.py             ClaimsTriageAgent: the hand-rolled tool-calling loop + guardrails
   agent_langgraph.py   LangGraphClaimsTriageAgent: the same agent as a StateGraph, with HITL
+  evaluation.py        eval scoring: metrics, baselines, failure taxonomy
   audit.py             writes AuditTrail to disk as JSON
   api.py               FastAPI POST /adjudicate (uses ClaimsTriageAgent)
   server.py            production ASGI entrypoint (`uvicorn claims_triage_agent.server:app`)
   demo.py              no-API-key ASGI entrypoint (`uvicorn claims_triage_agent.demo:app`)
   data/               synthetic policies.json, patients.json, policy_documents/, claims/
-tests/                pytest suite (tools, retriever, agent, agent_langgraph, api, demo)
-eval/                 eval_cases.json + run_eval.py (fake-reference / openai)
+tests/                pytest suite (tools, retriever, agent, agent_langgraph, api, demo, evaluation, llm_client, run_eval)
+eval/                 eval_cases.json (30 labeled cases), run_eval.py, results/ (baseline reports)
 Dockerfile, .dockerignore
 .github/workflows/ci.yml   ruff + mypy + pytest + docker build, on push/PR to main
 ```
